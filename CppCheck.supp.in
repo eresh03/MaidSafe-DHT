@@ -1,0 +1,3 @@
+// These typedefs are safe as they resolve to the same types
+variableHidingTypedef:@PROJECT_SOURCE_DIR@/src/maidsafe/dht/transport/transport.h:64
+variableHidingTypedef:@PROJECT_SOURCE_DIR@/src/maidsafe/dht/transport/transport.h:65

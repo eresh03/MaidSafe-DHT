@@ -366,6 +366,13 @@ IF(PYTHONINTERP_FOUND)
   ENDIF()
 ENDIF()
 
+IF(Cppcheck_EXECUTABLE)
+  ADD_TEST(CPPCHECK ${Cppcheck_EXECUTABLE} --enable=all --error-exitcode=-1 --xml -f -q -I${PROJECT_SOURCE_DIR}/src
+             --suppressions ${Cppcheck_SUPPRESSIONS}
+             ${PROJECT_SOURCE_DIR}/src)
+  SET_PROPERTY(TEST CPPCHECK PROPERTY LABELS Functional StaticCodeAnalysis)
+ENDIF()
+
 FOREACH(TEST_TARGET ${TEST_TARGETS})
   ADD_GTESTS(${TEST_TARGET})
 ENDFOREACH()
