@@ -610,6 +610,11 @@ void NodeImpl::GetBootstrapContacts(std::vector<Contact> *contacts) {
     contacts->push_back(contact_);
 }
 
+void NodeImpl::GetAllValues(std::vector<std::pair<std::string,
+                  std::vector<std::string>>> *values) {
+  data_store_->GetAllValues(values);
+}
+
 void NodeImpl::Ping(const Contact &contact, PingFunctor callback) {
   rpcs_->Ping(SecurifierPtr(), contact,
               std::bind(&NodeImpl::PingResponse, this, arg::_1, arg::_2,

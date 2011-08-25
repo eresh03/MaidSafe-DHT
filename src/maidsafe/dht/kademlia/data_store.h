@@ -191,6 +191,10 @@ class DataStore {
   // true.
   bool GetValues(const std::string &key,
                  std::vector<std::pair<std::string, std::string>> *values);
+
+  void GetAllValues(std::vector<std::pair<std::string,
+                  std::vector<std::string>>> *values);
+  
   // Refreshes datastore.  Values which have expired confirm times and which are
   // marked as deleted are removed from the datastore.  Values with expired
   // expire times are marked as deleted.  All values with expired refresh times

@@ -178,6 +178,10 @@ class NodeImpl {
   /** Get Bootstrap contacts in the routing table
    *  @param[out] contacts Bootstrap contacts in the routing table */
   void GetBootstrapContacts(std::vector<Contact> *contacts);
+  /** Get all values in the data store
+   *  @param[out] values Values in the data store */
+  void GetAllValues(std::vector<std::pair<std::string,
+                  std::vector<std::string>>> *values);
   /** Invesrigates the contacts online/offline status
    *  @param[in] contact the contact to be pinged
    *  @param[in] callback The callback to report the result. */

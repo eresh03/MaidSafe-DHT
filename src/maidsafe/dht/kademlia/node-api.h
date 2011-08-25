@@ -199,10 +199,15 @@ class Node {
   // Retrieve all contacts from the routing table.  No network operation is
   // executed.
   void GetAllContacts(std::vector<Contact> *contacts);
-
+  
   // Retrieve all directly-connected contacts from the routing table.  No
   // network operation is executed.
   void GetBootstrapContacts(std::vector<Contact> *contacts);
+
+  // Retrieve all values from the data store.  No network operation is
+  // executed.
+  void GetAllValues(std::vector<std::pair<std::string, std::vector<std::string>>> *values);
+
 
   // Checks whether the contact is online or not
   void Ping(const Contact &contact, PingFunctor callback);

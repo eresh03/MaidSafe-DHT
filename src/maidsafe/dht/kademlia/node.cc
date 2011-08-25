@@ -129,6 +129,11 @@ void Node::GetBootstrapContacts(std::vector<Contact> *contacts) {
   pimpl_->GetBootstrapContacts(contacts);
 }
 
+void Node::GetAllValues(std::vector<std::pair<std::string,
+                  std::vector<std::string>>> *values) {
+  pimpl_->GetAllValues(values);
+}
+
 void Node::Ping(const Contact &contact, PingFunctor callback) {
   pimpl_->Ping(contact, callback);
 }

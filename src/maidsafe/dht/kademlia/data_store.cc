@@ -291,6 +291,28 @@ bool DataStore::GetValues(
   return (!values->empty());
 }
 
+void DataStore::GetAllValues(std::vector<std::pair<std::string,
+                  std::vector<std::string>>> *values) {
+  std::string current;
+  int current_key(0) ;
+  KeyValueIndex::index<TagKeyValue>::type& index_by_key_value =
+   key_value_index_->get<TagKeyValue>();
+  for(auto itr = index_by_key_value.begin(); itr != index_by_key_value.end();
+      ++itr) {
+    if ((*itr).key() == current) {
+      (*values)[current_key].second.push_back((*itr).value());
+    } else {
+      std::vector<std::string> values_for_current_key;
+      values_for_current_key.push_back((*itr).value());
+      (*values).push_back(
+        std::pair<std::string,std::vector<std::string>>((*itr).key(),
+                                            values_for_current_key));
+      ++current_key;
+    }
+    current = (*itr).key();
+  }
+}
+
 void DataStore::Refresh(std::vector<KeyValueTuple> *key_value_tuples) {
   KeyValueIndex::index<TagExpireTime>::type& index_by_expire_time =
       key_value_index_->get<TagExpireTime>();
