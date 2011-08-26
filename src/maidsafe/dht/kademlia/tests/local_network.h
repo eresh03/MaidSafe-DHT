@@ -30,22 +30,21 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string>
 #include <vector>
 
-#include "maidsafe/dht/log.h"
 #include "maidsafe/common/alternative_store.h"
 #include "maidsafe/dht/kademlia/node_container.h"
 #include "maidsafe/dht/kademlia/node_id.h"
+#include "maidsafe/dht/version.h"
+
+#if MAIDSAFE_DHT_VERSION != 3103
+#  error This API is not compatible with the installed library.\
+    Please update the maidsafe-dht library.
+#endif
+
 
 namespace maidsafe {
 namespace dht {
 namespace kademlia {
 namespace test {
-
-
-class TestNodeAlternativeStore : public AlternativeStore {
- public:
-  ~TestNodeAlternativeStore() {}
-  bool Has(const std::string&) const { return false; }
-};
 
 template <typename NodeType>
 class LocalNetwork {
@@ -102,8 +101,8 @@ void LocalNetwork<NodeType>::SetUp() {
     std::shared_ptr<maidsafe::dht::kademlia::NodeContainer<NodeType>>
         node_container(new maidsafe::dht::kademlia::NodeContainer<NodeType>());
     node_container->Init(threads_per_node_, SecurifierPtr(),
-        AlternativeStorePtr(new TestNodeAlternativeStore), false, k_,
-        alpha_, beta_, mean_refresh_interval_);
+                         AlternativeStorePtr(), false, k_, alpha_, beta_,
+                         mean_refresh_interval_);
     node_container->MakeAllCallbackFunctors(&mutex_, &cond_var_);
 
     int attempts(0), max_attempts(5), result(kPendingResult);
@@ -115,7 +114,6 @@ void LocalNetwork<NodeType>::SetUp() {
     }
     ASSERT_EQ(kSuccess, result);
     ASSERT_TRUE(node_container->node()->joined());
-    DLOG(INFO) << "Node " << i << " joined: " << DebugId(*node_container);
     if (i < num_full_nodes_)
       bootstrap_contacts.push_back(node_container->node()->contact());
     node_containers_.push_back(node_container);

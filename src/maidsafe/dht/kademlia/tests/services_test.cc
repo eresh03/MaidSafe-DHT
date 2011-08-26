@@ -24,6 +24,10 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
 TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+
+#include <algorithm>
+#include <functional>
+#include <set>
 #include <utility>
 #include <bitset>
 
@@ -137,9 +141,10 @@ class ServicesTest: public CreateContactAndNodeId, public testing::Test {
         routing_table_(new RoutingTable(node_id_, g_kKademliaK)),
         alternative_store_(),
         securifier_(new SecurifierGetPublicKeyAndValidation("", "", "")),
-        info_(), rank_info_(),
-        service_(new Service(routing_table_, data_store_,
-        alternative_store_, securifier_, g_kKademliaK)),
+        info_(),
+        rank_info_(),
+        service_(new Service(routing_table_, data_store_, alternative_store_,
+                             securifier_, g_kKademliaK)),
         num_of_pings_(0) {
     service_->set_node_joined(true);
   }
@@ -253,6 +258,14 @@ class ServicesTest: public CreateContactAndNodeId, public testing::Test {
     EXPECT_EQ(expectation, ops()) <<"For: " << op;
   }
 
+  void PingDownlistCallback(const Contact &contact,
+                            std::set<NodeId> *ids,
+                            boost::mutex *mutex,
+                            boost::condition_variable *cond_var) {
+    boost::thread(&ServicesTest::DoPingDownlistCallback, this, contact, ids,
+                  mutex, cond_var);
+  }
+
   virtual void TearDown() {}
 
  protected:
@@ -266,7 +279,6 @@ class ServicesTest: public CreateContactAndNodeId, public testing::Test {
       EXPECT_EQ(kSuccess, data_store_->StoreValue(cur_kvt.key_value_signature,
                                                   old_ttl,
                                                   cur_kvt.request_and_signature,
-                                                  crypto_key.public_key(),
                                                   false));
     }
   }
@@ -323,6 +335,16 @@ class ServicesTest: public CreateContactAndNodeId, public testing::Test {
       return bptime::neg_infin;
     return (*it).refresh_time;
   }
+
+  void DoPingDownlistCallback(const Contact &contact,
+                              std::set<NodeId> *ids,
+                              boost::mutex *mutex,
+                              boost::condition_variable *cond_var) {
+    boost::mutex::scoped_lock lock(*mutex);
+    ids->insert(contact.node_id());
+    cond_var->notify_one();
+  }
+
 
   Contact contact_;
   kademlia::NodeId node_id_;
@@ -447,7 +469,6 @@ TEST_F(ServicesTest, BEH_Store) {
     AddTestValidation(securifier_, sender_id.String(),
                       crypto_key_data.public_key());
     EXPECT_EQ(kSuccess, data_store_->StoreValue(kvs, old_ttl, request_signature,
-                                                crypto_key_data.public_key(),
                                                 false));
     ASSERT_EQ(1U, GetDataStoreSize());
 
@@ -520,7 +541,6 @@ TEST_F(ServicesTest, BEH_Delete) {
     service.set_node_joined(true);
 
     EXPECT_EQ(kSuccess, data_store_->StoreValue(kvs, old_ttl, request_signature,
-                                                crypto_key_data.public_key(),
                                                 false));
     ASSERT_EQ(1U, GetDataStoreSize());
 
@@ -545,7 +565,7 @@ TEST_F(ServicesTest, BEH_Delete) {
     protobuf::DeleteResponse delete_response;
     service_->Delete(info_, delete_request, delete_message,
                      delete_message_sig, &delete_response, &time_out);
-    EXPECT_FALSE(delete_response.result());
+    EXPECT_TRUE(delete_response.result());
     EXPECT_EQ(0U, GetSenderTaskSize());
     JoinNetworkLookup(securifier_);
     ASSERT_EQ(0U, GetDataStoreSize());
@@ -676,7 +696,6 @@ TEST_F(ServicesTest, BEH_StoreRefresh) {
     // Try to storerefresh a validated tuple into the datastore already
     // containing it
     EXPECT_EQ(kSuccess, data_store_->StoreValue(kvs, old_ttl, request_signature,
-                                                crypto_key_data.public_key(),
                                                 false));
     ASSERT_EQ(1U, GetDataStoreSize());
     bptime::ptime refresh_time_old = GetRefreshTime(kvs);
@@ -767,7 +786,6 @@ TEST_F(ServicesTest, BEH_DeleteRefresh) {
     service.set_node_joined(true);
 
     EXPECT_EQ(kSuccess, data_store_->StoreValue(kvs, old_ttl, request_signature,
-                                                crypto_key_data.public_key(),
                                                 false));
     ASSERT_EQ(1U, GetDataStoreSize());
 
@@ -793,7 +811,7 @@ TEST_F(ServicesTest, BEH_DeleteRefresh) {
     protobuf::DeleteRefreshResponse delete_refresh_response;
     service_->DeleteRefresh(info_, delete_refresh_request,
                             &delete_refresh_response, &time_out);
-    EXPECT_FALSE(delete_refresh_response.result());
+    EXPECT_TRUE(delete_refresh_response.result());
     EXPECT_EQ(0U, GetSenderTaskSize());
     JoinNetworkLookup(securifier_);
     ASSERT_EQ(0U, GetDataStoreSize());
@@ -971,6 +989,39 @@ TEST_F(ServicesTest, BEH_FindNodes) {
     ASSERT_EQ(2 * g_kKademliaK + 1, GetRoutingTableSize());
     ASSERT_EQ(0U, CountUnValidatedContacts());
   }
+
+  Clear();
+  {
+    // try to find the target from a 2*k filled routing table
+    // where num_nodes_requested < g_kKademliaK, it should return
+    // g_kKademliaK contacts
+    PopulateRoutingTable(g_kKademliaK, 500);
+    PopulateRoutingTable(g_kKademliaK, 501);
+    EXPECT_EQ(2 * g_kKademliaK, GetRoutingTableSize());
+
+    protobuf::FindNodesResponse find_nodes_rsp;
+    find_nodes_req.set_num_nodes_requested(g_kKademliaK/2);
+    service_->FindNodes(info_, find_nodes_req, &find_nodes_rsp, &time_out);
+    ASSERT_EQ(true, find_nodes_rsp.IsInitialized());
+    ASSERT_EQ(g_kKademliaK, find_nodes_rsp.closest_nodes_size());
+    ASSERT_EQ(2 * g_kKademliaK, GetRoutingTableSize());
+  }
+  Clear();
+  {
+    // try to find the target from a 2*k filled routing table
+    // where num_nodes_requested > g_kKademliaK, it should return
+    // num_nodes_requested contacts
+    PopulateRoutingTable(g_kKademliaK, 500);
+    PopulateRoutingTable(g_kKademliaK, 501);
+    EXPECT_EQ(2 * g_kKademliaK, GetRoutingTableSize());
+
+    protobuf::FindNodesResponse find_nodes_rsp;
+    find_nodes_req.set_num_nodes_requested(g_kKademliaK*3/2);
+    service_->FindNodes(info_, find_nodes_req, &find_nodes_rsp, &time_out);
+    ASSERT_EQ(true, find_nodes_rsp.IsInitialized());
+    ASSERT_EQ(g_kKademliaK*3/2, find_nodes_rsp.closest_nodes_size());
+    ASSERT_EQ(2 * g_kKademliaK, GetRoutingTableSize());
+  }
 }
 
 TEST_F(ServicesTest, BEH_FindValue) {
@@ -1024,7 +1075,42 @@ TEST_F(ServicesTest, BEH_FindValue) {
     ASSERT_EQ(2 * g_kKademliaK + 1, GetRoutingTableSize());
     ASSERT_EQ(1U, CountUnValidatedContacts());
   }
+
   Clear();
+  {
+    // Search in empty datastore with 2*k populated routing table
+    // no alternative_store_,  where num_nodes_requested < g_kKademliaK.
+    // The response should contain g_kKademliaK contacts.
+    PopulateRoutingTable(g_kKademliaK, 500);
+    PopulateRoutingTable(g_kKademliaK, 501);
+
+    find_value_req.set_num_nodes_requested(g_kKademliaK/2);
+    protobuf::FindValueResponse find_value_rsp;
+    service_->FindValue(info_, find_value_req, &find_value_rsp, &time_out);
+    ASSERT_TRUE(find_value_rsp.result());
+    ASSERT_EQ(g_kKademliaK, find_value_rsp.closest_nodes_size());
+    ASSERT_EQ(2 * g_kKademliaK, GetRoutingTableSize());
+    ASSERT_EQ(1U, CountUnValidatedContacts());
+  }
+  Clear();
+
+  {
+    // Search in empty datastore with 2*k populated routing table no
+    // alternative_store_, where num_nodes_requested > g_kKademliaK.
+    // The response should contain num_nodes_requested contacts.
+    PopulateRoutingTable(g_kKademliaK, 500);
+    PopulateRoutingTable(g_kKademliaK, 501);
+
+    find_value_req.set_num_nodes_requested(g_kKademliaK*3/2);
+    protobuf::FindValueResponse find_value_rsp;
+    service_->FindValue(info_, find_value_req, &find_value_rsp, &time_out);
+    ASSERT_TRUE(find_value_rsp.result());
+    ASSERT_EQ(g_kKademliaK*3/2, find_value_rsp.closest_nodes_size());
+    ASSERT_EQ(2 * g_kKademliaK, GetRoutingTableSize());
+    ASSERT_EQ(1U, CountUnValidatedContacts());
+  }
+  Clear();
+
   {
     // Search in k populated datastore (not containing the target)
     // but with an empty routing table
@@ -1057,7 +1143,6 @@ TEST_F(ServicesTest, BEH_FindValue) {
               data_store_->StoreValue(target_kvt.key_value_signature,
                                       old_ttl,
                                       target_kvt.request_and_signature,
-                                      crypto_key.public_key(),
                                       false));
     ASSERT_EQ(g_kKademliaK + 1, GetDataStoreSize());
 
@@ -1126,45 +1211,68 @@ TEST_F(ServicesTest, BEH_FindValue) {
 }
 
 TEST_F(ServicesTest, BEH_Downlist) {
-  service_->GetPingDownListSignalHandler()->connect(
-      kademlia::PingDownListContactsPtr::element_type::slot_type(
-          &ServicesTest::FakePingContact, this, _1));
-  protobuf::DownlistNotification downlist_request;
+  // Try with a downlist with 2 x k_ NodeIds with all in routing table
+  PopulateRoutingTable(5 * g_kKademliaK);
+  std::vector<Contact> contacts;
+  routing_table_->GetAllContacts(&contacts);
+  std::sort(contacts.begin(), contacts.end());
 
-  {
-    // given an empty downlist
-    service_->Downlist(info_, downlist_request, &time_out);
-    ASSERT_EQ(0U, num_of_pings_);
+  protobuf::DownlistNotification downlist_notification;
+  NodeId contact_id(NodeId::kRandomId);
+  Contact contact = ComposeContact(contact_id, 5000);
+  downlist_notification.mutable_sender()->CopyFrom(ToProtobuf(contact));
+  std::set<NodeId> node_ids, pinged_node_ids;
+  for (size_t i(0); i != 2 * g_kKademliaK; ++i) {
+    downlist_notification.add_node_ids(contacts.at(i).node_id().String());
+    node_ids.insert(contacts.at(i).node_id());
   }
+
+  boost::mutex mutex;
+  boost::condition_variable cond_var;
+  routing_table_->ping_down_contact()->connect(
+      std::bind(&ServicesTest::PingDownlistCallback, this, arg::_1,
+                &pinged_node_ids, &mutex, &cond_var));
   {
-    // given a downlist contains k nodes in the routingtable
-    for (int i = 0; i < g_kKademliaK; ++i) {
-      NodeId contact_id = GenerateUniqueRandomId(node_id_, 500);
-      Contact contact = ComposeContact(contact_id, 5000);
-      downlist_request.add_node_ids(contact_id.String());
-      AddContact(routing_table_, contact, rank_info_);
+    boost::mutex::scoped_lock lock(mutex);
+    service_->Downlist(info_, downlist_notification, &time_out);
+    while (node_ids.size() != pinged_node_ids.size())
+      EXPECT_TRUE(cond_var.timed_wait(lock, bptime::milliseconds(10)));
+  }
+  ASSERT_EQ(node_ids.size(), pinged_node_ids.size());
+  auto in_itr(node_ids.begin()), out_itr(pinged_node_ids.begin());
+  while (in_itr != node_ids.end()) {
+    EXPECT_EQ(*in_itr, *out_itr);
+    ++in_itr;
+    ++out_itr;
+  }
+
+  // Try with a downlist with (2 x k_) + 1 NodeIds
+  pinged_node_ids.clear();
+  protobuf::DownlistNotification original_downlist_notification =
+      downlist_notification;
+  downlist_notification.add_node_ids(contacts.back().node_id().String());
+  node_ids.insert(contacts.back().node_id());
+  {
+    boost::mutex::scoped_lock lock(mutex);
+    service_->Downlist(info_, downlist_notification, &time_out);
+    while (node_ids.size() != pinged_node_ids.size()) {
+      if (!cond_var.timed_wait(lock, bptime::milliseconds(10)))
+        break;
     }
-    service_->Downlist(info_, downlist_request, &time_out);
-    ASSERT_EQ(g_kKademliaK, num_of_pings_);
   }
-  num_of_pings_ = 0;
+  EXPECT_TRUE(pinged_node_ids.empty());
+
+  // Try original downlist, but on an empty routing table
+  Clear();
   {
-    // given a downlist contains k+1 nodes
-    // with one node not in the routingtable
-    NodeId contact_id = GenerateUniqueRandomId(node_id_, 501);
-    downlist_request.add_node_ids(contact_id.String());
-    service_->Downlist(info_, downlist_request, &time_out);
-    ASSERT_EQ(g_kKademliaK, num_of_pings_);
+    boost::mutex::scoped_lock lock(mutex);
+    service_->Downlist(info_, original_downlist_notification, &time_out);
+    while (node_ids.size() != pinged_node_ids.size()) {
+      if (!cond_var.timed_wait(lock, bptime::milliseconds(10)))
+        break;
+    }
   }
-  num_of_pings_ = 0;
-  { // Node not joined
-    service_->set_node_joined(false);
-    NodeId contact_id = GenerateUniqueRandomId(node_id_, 501);
-    downlist_request.add_node_ids(contact_id.String());
-    service_->Downlist(info_, downlist_request, &time_out);
-    EXPECT_NE(g_kKademliaK, num_of_pings_);
-    service_->set_node_joined(true);
-  }
+  EXPECT_TRUE(pinged_node_ids.empty());
 }
 
 TEST_F(ServicesTest, BEH_Ping) {
@@ -1174,14 +1282,15 @@ TEST_F(ServicesTest, BEH_Ping) {
   ping_request.mutable_sender()->CopyFrom(ToProtobuf(contact));
 
   {
-    // Check failure with ping set incorrectly.
+    // Check with ping set to empty string.
     ping_request.set_ping("");
     protobuf::PingResponse ping_response;
     service_->Ping(info_, ping_request, &ping_response, &time_out);
-    EXPECT_FALSE(ping_response.IsInitialized());
-    EXPECT_FALSE(ping_response.has_echo());
+    EXPECT_TRUE(ping_response.IsInitialized());
+    EXPECT_TRUE(ping_response.has_echo());
+    EXPECT_TRUE(ping_response.echo().empty());
     EXPECT_EQ(0U, GetRoutingTableSize());
-    ASSERT_EQ(0U, CountUnValidatedContacts());
+    EXPECT_EQ(0U, CountUnValidatedContacts());
   }
   {
     // Check success.
@@ -1466,16 +1575,18 @@ TEST_F(ServicesTest, BEH_MultipleStoreRefreshRequests) {
     JoinNetworkLookup(securifier_);
     EXPECT_EQ(1U, GetDataStoreSize());
     bptime::ptime refresh_time_old_k1_v1 = GetRefreshTime(k1_v1);
-    EXPECT_FALSE(DoStoreRefresh(sender_id_3, crypto_key_data_3, sender_id_2,
-                                k1_v1, crypto_key_data_2));
-    EXPECT_TRUE(DoStoreRefresh(sender_id_2, crypto_key_data_2, sender_id_1,
-                               k1_v1, crypto_key_data_1));
+    // Invalid request recieves true but value doesn't get stored
+    EXPECT_TRUE(DoStoreRefresh(sender_id_3, crypto_key_data_3, sender_id_2,
+                               k1_v1, crypto_key_data_2));
+    // If the valid sender calls just after invalid sender it recieves false
+    EXPECT_FALSE(DoStoreRefresh(sender_id_2, crypto_key_data_2, sender_id_1,
+                                k1_v1, crypto_key_data_1));
     JoinNetworkLookup(securifier_);
     EXPECT_EQ(1U, GetDataStoreSize());
     EXPECT_TRUE(IsKeyValueInDataStore(k1_v1));
     EXPECT_FALSE(IsKeyValueInDataStore(k1_v2));
     bptime::ptime refresh_time_new_k1_v1 = GetRefreshTime(k1_v1);
-    EXPECT_GT(refresh_time_new_k1_v1, refresh_time_old_k1_v1);
+    EXPECT_EQ(refresh_time_new_k1_v1, refresh_time_old_k1_v1);
   }
   Clear();
   // Store refresh request for same key from different requester

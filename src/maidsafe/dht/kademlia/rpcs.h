@@ -30,6 +30,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "boost/date_time/posix_time/posix_time_types.hpp"
@@ -111,10 +112,12 @@ class Rpcs {
                     const Contact &peer,
                     RpcPingFunctor callback);
   virtual void FindValue(const Key &key,
+                         const uint16_t &nodes_requested,
                          SecurifierPtr securifier,
                          const Contact &peer,
                          RpcFindValueFunctor callback);
   virtual void FindNodes(const Key &key,
+                         const uint16_t &nodes_requested,
                          SecurifierPtr securifier,
                          const Contact &peer,
                          RpcFindNodesFunctor callback);
@@ -151,6 +154,19 @@ class Rpcs {
   virtual void Prepare(SecurifierPtr securifier,
                        TransportPtr &transport,
                        MessageHandlerPtr &message_handler);
+
+  std::pair<std::string, std::string> MakeStoreRequestAndSignature(
+    const Key &key,
+    const std::string &value,
+    const std::string &signature,
+    const boost::posix_time::seconds &ttl,
+    SecurifierPtr securifier);
+
+  std::pair<std::string, std::string> MakeDeleteRequestAndSignature(
+    const Key &key,
+    const std::string &value,
+    const std::string &signature,
+    SecurifierPtr securifier);
 
  protected:
   AsioService &asio_service_;
@@ -261,6 +277,7 @@ void Rpcs<TransportType>::Ping(SecurifierPtr securifier,
 
 template <typename TransportType>
 void Rpcs<TransportType>::FindValue(const Key &key,
+                                    const uint16_t &nodes_requested,
                                     SecurifierPtr securifier,
                                     const Contact &peer,
                                     RpcFindValueFunctor callback) {
@@ -273,6 +290,7 @@ void Rpcs<TransportType>::FindValue(const Key &key,
   protobuf::FindValueRequest request;
   *request.mutable_sender() = ToProtobuf(contact_);
   request.set_key(key.String());
+  request.set_num_nodes_requested(nodes_requested);
   std::shared_ptr<RpcsFailurePeer> rpcs_failure_peer(new RpcsFailurePeer);
   rpcs_failure_peer->peer = peer;
 
@@ -292,6 +310,7 @@ void Rpcs<TransportType>::FindValue(const Key &key,
 
 template <typename TransportType>
 void Rpcs<TransportType>::FindNodes(const Key &key,
+                                    const uint16_t &nodes_requested,
                                     SecurifierPtr securifier,
                                     const Contact &peer,
                                     RpcFindNodesFunctor callback) {
@@ -304,6 +323,7 @@ void Rpcs<TransportType>::FindNodes(const Key &key,
   protobuf::FindNodesRequest request;
   *request.mutable_sender() = ToProtobuf(contact_);
   request.set_key(key.String());
+  request.set_num_nodes_requested(nodes_requested);
   std::shared_ptr<RpcsFailurePeer> rpcs_failure_peer(new RpcsFailurePeer);
   rpcs_failure_peer->peer = peer;
 
@@ -343,8 +363,7 @@ void Rpcs<TransportType>::Store(const Key &key,
 
   protobuf::SignedValue *signed_value(request.mutable_signed_value());
   signed_value->set_value(value);
-  signed_value->set_signature(signature.empty() ? securifier->Sign(value) :
-                              signature);
+  signed_value->set_signature(signature);
   request.set_ttl(ttl.is_pos_infinity() ? -1 : ttl.total_seconds());
   std::string message =
       message_handler->WrapMessage(request, peer.public_key());
@@ -416,8 +435,7 @@ void Rpcs<TransportType>::Delete(const Key &key,
   request.set_key(key.String());
   protobuf::SignedValue *signed_value(request.mutable_signed_value());
   signed_value->set_value(value);
-  signed_value->set_signature(signature.empty() ? securifier->Sign(value) :
-                              signature);
+  signed_value->set_signature(signature);
   std::string message =
       message_handler->WrapMessage(request, peer.public_key());
   // Connect callback to message handler for incoming parsed response or error
@@ -549,17 +567,32 @@ void Rpcs<TransportType>::FindValueCallback(
                values, contacts, alternative_value_holder);
       return;
     }
-    for (int i = 0; i < response.signed_values_size(); ++i)
-      values.push_back(response.signed_values(i).value());
 
-    for (int i = 0; i < response.closest_nodes_size(); ++i)
-      contacts.push_back(FromProtobuf(response.closest_nodes(i)));
     if (response.has_alternative_value_holder()) {
       alternative_value_holder =
           FromProtobuf(response.alternative_value_holder());
+      callback(RankInfoPtr(new transport::Info(info)),
+               kFoundAlternativeStoreHolder, values, contacts,
+               alternative_value_holder);
+      return;
     }
 
-    callback(RankInfoPtr(new transport::Info(info)), transport_condition,
+    if (response.signed_values_size() != 0) {
+      for (int i = 0; i < response.signed_values_size(); ++i)
+        values.push_back(response.signed_values(i).value());
+      callback(RankInfoPtr(new transport::Info(info)), kSuccess, values,
+               contacts, alternative_value_holder);
+      return;
+    }
+
+    if (response.closest_nodes_size() != 0) {
+      for (int i = 0; i < response.closest_nodes_size(); ++i)
+        contacts.push_back(FromProtobuf(response.closest_nodes(i)));
+      callback(RankInfoPtr(new transport::Info(info)), kFailedToFindValue,
+               values, contacts, alternative_value_holder);
+      return;
+    }
+    callback(RankInfoPtr(new transport::Info(info)), kIterativeLookupFailed,
              values, contacts, alternative_value_holder);
   }
 }
@@ -734,6 +767,51 @@ void Rpcs<TransportType>::Prepare(SecurifierPtr securifier,
       transport::OnError::element_type::slot_type(
           &MessageHandler::OnError, message_handler.get(),
           _1, _2).track_foreign(message_handler));
+}
+
+template <typename T>
+std::pair<std::string, std::string> Rpcs<T>::MakeStoreRequestAndSignature(
+    const Key &key,
+    const std::string &value,
+    const std::string &signature,
+    const boost::posix_time::seconds &ttl,
+    SecurifierPtr securifier) {
+  MessageHandlerPtr message_handler(new MessageHandler(securifier));
+
+  protobuf::StoreRequest request;
+  *request.mutable_sender() = ToProtobuf(contact_);
+  request.set_key(key.String());
+
+  protobuf::SignedValue *signed_value(request.mutable_signed_value());
+  signed_value->set_value(value);
+  signed_value->set_signature(signature);
+  request.set_ttl(ttl.is_pos_infinity() ? -1 : ttl.total_seconds());
+  std::string message(request.SerializeAsString());
+  std::string message_signature(securifier->Sign(
+        boost::lexical_cast<std::string>(kStoreRequest) + message));
+  return std::make_pair(message, message_signature);
+}
+
+template <typename T>
+std::pair<std::string, std::string> Rpcs<T>::MakeDeleteRequestAndSignature(
+    const Key &key,
+    const std::string &value,
+    const std::string &signature,
+    SecurifierPtr securifier) {
+  MessageHandlerPtr message_handler(new MessageHandler(securifier));
+
+  protobuf::DeleteRequest request;
+  *request.mutable_sender() = ToProtobuf(contact_);
+  request.set_key(key.String());
+
+  protobuf::SignedValue *signed_value(request.mutable_signed_value());
+  signed_value->set_value(value);
+  signed_value->set_signature(signature);
+
+  std::string message(request.SerializeAsString());
+  std::string message_signature(securifier->Sign(
+        boost::lexical_cast<std::string>(kDeleteRequest) + message));
+  return std::make_pair(message, message_signature);
 }
 
 }  // namespace kademlia

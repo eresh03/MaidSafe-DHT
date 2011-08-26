@@ -104,8 +104,10 @@ class NodeContainer {
               const boost::posix_time::time_duration &ttl,
               SecurifierPtr securifier);
   void FindValue(const Key &key,
-                 SecurifierPtr securifier);
-  void FindNodes(const Key &key);
+                 SecurifierPtr securifier,
+                 const uint16_t &extra_contacts = 0);
+  void FindNodes(const Key &key,
+                 const uint16_t &extra_contacts = 0);
   void GetContact(const NodeId &node_id);
   void Ping(const Contact &contact);
 
@@ -481,13 +483,15 @@ void NodeContainer<NodeType>::Update(
 
 template <typename NodeType>
 void NodeContainer<NodeType>::FindValue(const Key &key,
-                                        SecurifierPtr securifier) {
-  node_->FindValue(key, securifier, find_value_functor_);
+                                        SecurifierPtr securifier,
+                                        const uint16_t &extra_contacts) {
+  node_->FindValue(key, securifier, find_value_functor_, extra_contacts);
 }
 
 template <typename NodeType>
-void NodeContainer<NodeType>::FindNodes(const Key &key) {
-  node_->FindNodes(key, find_nodes_functor_);
+void NodeContainer<NodeType>::FindNodes(const Key &key,
+                                        const uint16_t &extra_contacts) {
+  node_->FindNodes(key, find_nodes_functor_, extra_contacts);
 }
 
 template <typename NodeType>
@@ -545,7 +549,6 @@ void NodeContainer<NodeType>::FindValueCallback(
     FindValueReturns find_value_returns_in,
     boost::mutex *mutex,
     boost::condition_variable *cond_var) {
-  std::cout << "FindValueCallback\n";
   boost::mutex::scoped_lock lock(*mutex);
   find_value_returns_ = find_value_returns_in;
   cond_var->notify_one();
