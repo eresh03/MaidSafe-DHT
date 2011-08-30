@@ -113,6 +113,12 @@ class NodeImpl {
              const bptime::time_duration &ttl,
              SecurifierPtr securifier,
              StoreFunctor callback);
+
+  /** Function to DELETE the content of a <key, value> in the node's data store.
+   *  @param[in] key_value_signature the key, value pair to to find */
+  
+  void DeleteKeyValue(const KeyValueSignature &key_value_signature);
+  
   /** Function to DELETE the content of a <key, value> in the Kademlia network.
    *  The operation will delete the original one then store the new one.
    *  @param[in] Key The key to find

@@ -223,6 +223,16 @@ int DataStore::StoreValue(
   }
 }
 
+void DataStore::DeleteKeyValue(const KeyValueSignature &key_value_signature) {
+  KeyValueIndex::index<TagKeyValue>::type& index_by_key_value =
+      key_value_index_->get<TagKeyValue>();
+  auto it = index_by_key_value.find(boost::make_tuple(key_value_signature.key,
+                                    key_value_signature.value));
+  if (it == index_by_key_value.end())
+    return;
+  index_by_key_value.erase(it);
+}
+
 bool DataStore::DeleteValue(
     const KeyValueSignature &key_value_signature,
     const RequestAndSignature &delete_request_and_signature,
@@ -294,7 +304,7 @@ bool DataStore::GetValues(
 void DataStore::GetAllValues(std::vector<std::pair<std::string,
                   std::vector<std::string>>> *values) {
   std::string current;
-  int current_key(0) ;
+  int current_key(0);
   KeyValueIndex::index<TagKeyValue>::type& index_by_key_value =
    key_value_index_->get<TagKeyValue>();
   for(auto itr = index_by_key_value.begin(); itr != index_by_key_value.end();

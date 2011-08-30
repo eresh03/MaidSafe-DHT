@@ -71,6 +71,11 @@ void Node::Store(const Key &key,
   pimpl_->Store(key, value, signature, ttl, securifier, callback);
 }
 
+
+void Node::DeleteKeyValue(const KeyValueSignature &key_value_signature) {
+  pimpl_->DeleteKeyValue(key_value_signature);
+}
+
 void Node::Delete(const Key &key,
                  const std::string &value,
                  const std::string &signature,

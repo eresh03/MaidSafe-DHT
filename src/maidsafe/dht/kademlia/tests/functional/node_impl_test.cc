@@ -116,7 +116,7 @@ TEST_P(NodeImplTest, FUNC_JoinLeave) {
   node_container->MakeAllCallbackFunctors(&env_->mutex_, &env_->cond_var_);
   std::vector<Contact> bootstrap_contacts;
   (*env_->node_containers_.rbegin())->node()->GetBootstrapContacts(
-      &bootstrap_contacts);
+      &bootstrap_contacts); 
 
   // Get state of all nodes' routing tables before bootstrapping
   std::vector<std::vector<Contact>> all_nodes_contacts_before;

@@ -173,6 +173,13 @@ class DataStore {
                  const RequestAndSignature &store_request_and_signature,
                  const std::string &public_key,
                  bool is_refresh);
+
+  // This function is only used in simulations and allows direct deletion of a
+  // particular key value pair from the specified node. This function make no
+  // RPCs.
+  
+  void DeleteKeyValue(const KeyValueSignature &key_value_signature);
+
   // Marks the key, value, signature as deleted.
   // If the key and value doesn't already exist, the method returns true.
   // If the key and value already exists and is marked as deleted, the method

@@ -286,6 +286,10 @@ void NodeImpl::Store(const Key &key,
                            securifier, StoreArgsPtr(new StoreArgs(callback))));
 }
 
+void NodeImpl::DeleteKeyValue(const KeyValueSignature &key_value_signature) {
+  data_store_->DeleteKeyValue(key_value_signature);
+}
+
 void NodeImpl::Delete(const Key &key,
                       const std::string &value,
                       const std::string &signature,

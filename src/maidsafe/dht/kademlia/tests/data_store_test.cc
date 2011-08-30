@@ -865,6 +865,9 @@ TEST_F(DataStoreTest, BEH_GetValues) {
     EXPECT_EQ(kvts.at(i).key_value_signature.value, values.at(0).first);
     EXPECT_EQ(kvts.at(i).key_value_signature.signature, values.at(0).second);
   }
+  std::vector<std::pair<std::string,
+                  std::vector<std::string>>> myvalues;
+  // data_store_->GetAllValues(&myvalues);
 
   // Delete initial key,values
   for (size_t i = 0; i != kRepeatedValues - 1; ++i) {
