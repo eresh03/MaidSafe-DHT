@@ -135,7 +135,7 @@ class Node {
   // This function is only used in simulations and allows direct deletion of a
   // particular key value pair from the specified node. This function make no
   // RPCs.
-  void DeleteKeyValue(const KeyValueSignature &key_value_signature);
+  void DeleteKeyValue(std::string key, std::string value);
   
   // Delete <key,value,signature> from network.  If signature is empty, the
   // value is signed using securifier, unless it is invalid, in which case

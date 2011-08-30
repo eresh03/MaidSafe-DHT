@@ -330,7 +330,8 @@ void NodeImpl::Store(const Key &key,
   StartLookup(store_args);
 }
 
-void NodeImpl::DeleteKeyValue(const KeyValueSignature &key_value_signature) {
+void NodeImpl::DeleteKeyValue(std::string key, std::string value) {
+  KeyValueSignature key_value_signature(key, value, "");
   data_store_->DeleteKeyValue(key_value_signature);
 }
 
