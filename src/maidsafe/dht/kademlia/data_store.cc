@@ -249,12 +249,12 @@ bool DataStore::GetValues(
 void DataStore::GetAllValues(std::vector<std::pair<std::string,
                   std::vector<std::string>>> *values) {
   std::string current;
-  int current_key(0);
+  int current_key(-1);
   KeyValueIndex::index<TagKeyValue>::type& index_by_key_value =
    key_value_index_->get<TagKeyValue>();
   for(auto itr = index_by_key_value.begin(); itr != index_by_key_value.end();
       ++itr) {
-    if ((*itr).key() == current) {
+    if ((*itr).key() == current && (*values).size() > 0) {
       (*values)[current_key].second.push_back((*itr).value());
     } else {
       std::vector<std::string> values_for_current_key;
