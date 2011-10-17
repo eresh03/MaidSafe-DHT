@@ -20,6 +20,6 @@ want to use a MinGW environment instead, move to build/Win_MinGW and see the REA
 
    This will create an MSVC solution (build\Win_MSVC\maidsafe_dht.sln) which
    will allow you to make all the targets from within the chosen MSVC IDE.
-   
+
    Once the solution is built, you can run extract_includes.bat to create a
    directory "build\Win_MSVC\include" which will contain the public headers.

@@ -824,9 +824,9 @@ void NodeImpl::RemoveDownlistedContacts(LookupArgsPtr lookup_args,
   auto contacts_itr(contacts->begin());
   while (downlist_itr != lookup_args->downlist.end() &&
          contacts_itr != contacts->end()) {
-    if ((*downlist_itr).first < *contacts_itr) {
+    if (contacts->key_comp()((*downlist_itr).first, *contacts_itr)) {
       ++downlist_itr;
-    } else if (*contacts_itr < (*downlist_itr).first) {
+    } else if (contacts->key_comp()(*contacts_itr, (*downlist_itr).first)) {
       ++contacts_itr;
     } else {
       (*downlist_itr++).second.providers.push_back((*this_peer).first);
@@ -873,6 +873,10 @@ LookupContacts::iterator NodeImpl::InsertCloseContacts(
       if (new_contacts_itr == contacts.end())
         break;
     }
+  }
+  auto itr = lookup_args->lookup_contacts.find(contact_);
+  if (itr != lookup_args->lookup_contacts.end() && !client_only_node_) {
+    (*itr).second.rpc_state = ContactInfo::kRepliedOK;
   }
   return GetShortlistUpperBound(lookup_args);
 }
