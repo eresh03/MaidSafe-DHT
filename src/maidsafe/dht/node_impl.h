@@ -72,6 +72,7 @@ class MockNodeImplTest_BEH_FindValue_Test;
 class MockNodeImplTest_BEH_AssessLookupState_Test;
 class MockNodeImplTest_BEH_RemoveDownlistedContacts_Test;
 class NodeImplTest_FUNC_StoreRefreshInvalidSigner_Test;
+class NodeImplTest_FUNC_FindNodes_Test;
 }  // namespace test
 
 typedef std::function<void(RankInfoPtr, const int&)> StoreRefreshFunctor;
@@ -229,6 +230,7 @@ class NodeImpl {
   friend class test::MockNodeImplTest_BEH_AssessLookupState_Test;
   friend class test::MockNodeImplTest_BEH_RemoveDownlistedContacts_Test;
   friend class test::NodeImplTest_FUNC_StoreRefreshInvalidSigner_Test;
+  friend class test::NodeImplTest_FUNC_FindNodes_Test;  
 
  private:
   NodeImpl(const NodeImpl&);

@@ -106,6 +106,7 @@ NodeImpl::~NodeImpl() {
 void NodeImpl::Join(const NodeId &node_id,
                     std::vector<Contact> bootstrap_contacts,
                     JoinFunctor callback) {
+  std::cout << DebugId(contact_) <<  " Impl::Join1 " <<  DebugId(contact_) << std::endl;  
   if (joined_) {
     asio_service_.post(std::bind(&NodeImpl::JoinSucceeded, this, callback));
     return;
@@ -157,8 +158,9 @@ void NodeImpl::Join(const NodeId &node_id,
     protobuf::Contact proto_contact(ToProtobuf(contact_));
     proto_contact.set_node_id(NodeId().String());
     rpcs_->set_contact(FromProtobuf(proto_contact));
-  }
-
+  }  
+  std::cout << DebugId(contact_) << " Impl::Join2 " <<  DebugId(contact_) << std::endl;  
+  
   routing_table_.reset(new RoutingTable(node_id, k_));
   // Connect the slots to the routing table signals.
   ConnectPingOldestContact();
@@ -181,6 +183,10 @@ void NodeImpl::Join(const NodeId &node_id,
   }
 
   OrderedContacts search_contacts(CreateOrderedContacts(node_id));
+  std::cout <<  DebugId(contact_) <<  " search_contacts.size(): " << search_contacts.size() << std::endl;
+  for (auto itr(bootstrap_contacts.begin()); itr != bootstrap_contacts.end(); ++itr) {
+    std::cout << "bootstrap_contacts: " << DebugId(*itr) << std::endl;
+  }  
   search_contacts.insert(bootstrap_contacts.front());
   bootstrap_contacts.erase(bootstrap_contacts.begin());
   FindValueArgsPtr find_value_args(
@@ -207,6 +213,10 @@ void NodeImpl::JoinFindValueCallback(FindValueReturns find_value_returns,
     if (NodeContacted(find_value_returns.return_code))
       none_reached = false;
     OrderedContacts search_contacts(CreateOrderedContacts(node_id));
+    std::cout << "search_contacts.size() cb: " << search_contacts.size() << std::endl;  
+    for (auto itr(bootstrap_contacts.begin()); itr != bootstrap_contacts.end(); ++itr) {
+      std::cout << "search_contacts: " << DebugId(*itr) << std::endl;
+    }    
     search_contacts.insert(bootstrap_contacts.front());
     bootstrap_contacts.erase(bootstrap_contacts.begin());
     FindValueArgsPtr find_value_args(
@@ -452,6 +462,9 @@ void NodeImpl::FindNodes(const Key &key,
       GetClosestContactsLocally(key, k_ + extra_contacts));
   FindNodesArgsPtr find_nodes_args(new FindNodesArgs(key, k_ + extra_contacts,
       close_contacts, default_securifier_, callback));
+  for (auto it(close_contacts.begin()); it != close_contacts.end(); ++it) {
+    std::cout << "closest locally: " << DebugId(*it) << std::endl;
+  }  
   StartLookup(find_nodes_args);
 }
 
@@ -634,6 +647,10 @@ void NodeImpl::DoLookupIteration(LookupArgsPtr lookup_args) {
             lookup_args->kNumContactsRequested);
     ++itr;
   }
+  std::cout << "Do rpcs_in_flight_for_current_iteration: " << lookup_args->rpcs_in_flight_for_current_iteration << std::endl;
+  std::cout << "Do total_lookup_rpcs_in_flight: " << lookup_args->total_lookup_rpcs_in_flight << std::endl;
+  std::cout << "Do lookup_phase_complete: " << lookup_args->lookup_phase_complete << std::endl;
+  std::cout << "kNumContactsRequested: " << lookup_args->kNumContactsRequested << std::endl;  
 }
 
 void NodeImpl::IterativeFindCallback(
@@ -646,7 +663,11 @@ void NodeImpl::IterativeFindCallback(
     LookupArgsPtr lookup_args) {
   // It is only OK for a node to return no meaningful information if this is
   // the second to join the network (peer being the first)
+  std::cout <<  DebugId(contact_) << " ::It peer: " << DebugId(peer) << std::endl;    
   boost::mutex::scoped_lock lock(lookup_args->mutex);
+  std::cout << "::It peer: " << DebugId(peer) << std::endl;
+  for (auto it(contacts.begin()); it != contacts.end(); ++it)
+    std::cout << "::It peer_closest: " << DebugId(*it) << std::endl;  
   bool second_node(false);
   if (result == kIterativeLookupFailed &&
       lookup_args->lookup_contacts.size() == 1) {
@@ -751,8 +772,13 @@ void NodeImpl::IterativeFindCallback(
   HandleCompletedLookup(lookup_args, shortlist_upper_bound, shortlist_ok_count);
 
   // If this is the last lookup callback, send the downlist notifications out.
-  if (lookup_args->total_lookup_rpcs_in_flight == 0)
+  if (lookup_args->total_lookup_rpcs_in_flight == 0) {
     SendDownlist(lookup_args->downlist);
+    for (auto a(lookup_args->downlist.begin()); a != lookup_args->downlist.end(); ++a)
+    {
+      std::cout << DebugId(contact_) << " downlist: " << DebugId((*a).first) << std::endl;
+    }    
+  }
 }
 
 bool NodeImpl::AbortLookup(
@@ -856,9 +882,11 @@ LookupContacts::iterator NodeImpl::InsertCloseContacts(
         break;
       }
 
-      if ((*existing_contacts_itr).first < *new_contacts_itr) {
+      if (contacts.key_comp()((*existing_contacts_itr).first,
+          *new_contacts_itr)) {
         insertion_point = existing_contacts_itr++;
-      } else if (*new_contacts_itr < (*existing_contacts_itr).first) {
+      } else if (contacts.key_comp()(*new_contacts_itr,
+          (*existing_contacts_itr).first)) {
         insertion_point = lookup_args->lookup_contacts.insert(
             insertion_point, std::make_pair(*new_contacts_itr++, contact_info));
       } else {
@@ -904,6 +932,11 @@ void NodeImpl::AssessLookupState(LookupArgsPtr lookup_args,
     }
     ++itr;
   }
+  std::cout << "assess rpcs_in_flight_for_current_iteration: " << lookup_args->rpcs_in_flight_for_current_iteration << std::endl;
+  std::cout << "assess total_lookup_rpcs_in_flight: " << lookup_args->total_lookup_rpcs_in_flight << std::endl;
+  std::cout << "assess lookup_phase_complete: " << lookup_args->lookup_phase_complete << std::endl;
+  std::cout << "assess kNumContactsRequested: " << lookup_args->kNumContactsRequested << std::endl;  
+  std::cout << "assess (*shortlist_ok_count):" << (*shortlist_ok_count) << std::endl;  
 }
 
 void NodeImpl::HandleCompletedLookup(

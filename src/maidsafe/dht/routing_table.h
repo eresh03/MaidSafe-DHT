@@ -75,6 +75,7 @@ class RoutingTableSingleKTest;
 class RoutingTableSingleKTest_FUNC_ForceKAcceptNewPeer_Test;
 class ServicesTest;
 class RoutingTableSingleKTest_BEH_MutexTestWithMultipleThread_Test;
+class NodeImplTest_FUNC_FindNodes_Test;
 }  // namespace test
 
 class KBucket;
@@ -404,6 +405,7 @@ class RoutingTable {
   friend class test::ServicesTest;
   friend class
       test::RoutingTableSingleKTest_BEH_MutexTestWithMultipleThread_Test;
+  friend class test::NodeImplTest_FUNC_FindNodes_Test;      
  private:
   typedef boost::shared_lock<boost::shared_mutex> SharedLock;
   typedef boost::upgrade_lock<boost::shared_mutex> UpgradeLock;
