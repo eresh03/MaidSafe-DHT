@@ -213,6 +213,9 @@ class MockRpcs : public Rpcs<TransportType>, public CreateContactAndNodeId {
                                  SecurifierPtr securifier,
                                  const Contact &peer,
                                  RpcFindNodesFunctor callback));
+  MOCK_METHOD3_T(Downlist, void(const std::vector<NodeId> &node_ids,
+                                 SecurifierPtr securifier,
+                                 const Contact &peer));
   MOCK_METHOD7_T(Store, void(const Key &key,
                              const std::string &value,
                              const std::string &signature,
@@ -290,6 +293,19 @@ class MockRpcs : public Rpcs<TransportType>, public CreateContactAndNodeId {
           &MockRpcs<TransportType>::FindNodeNoResponseThread, this,
           callback, response_list));
     }
+  }
+
+  void SendDownlistMock(const std::vector<NodeId> &node_ids,
+                        const Contact &peer,
+                        const std::map<Contact,std::vector<Contact>>
+                            &expected_provider_list) {
+// MAKE ALL ASSERTS HERE FOR DOWNLIST RESULTS.
+// OR RETURN A COUNT OR SOMETHING INDICATING THE SUCCESSFUL RETRIEVAL OF DATA
+    auto it(expected_provider_list.find(peer));
+    if (it != expected_provider_list.end())
+      ASSERT_EQ((*it).second.size(), node_ids.size());
+    else
+      ASSERT_TRUE(false) << "Invalid Provider Received";
   }
 
   void FindNodeResponseClose(RpcFindNodesFunctor callback) {
@@ -2536,6 +2552,60 @@ TEST_F(MockNodeImplTest, BEH_InsertCloseContacts) {
               std::find((*it).second.providers.begin(),
                         (*it).second.providers.end(),
                         (*peer_itr).first));
+}
+
+TEST_F(MockNodeImplTest, BEH_SendDownlist) {
+  /*std::map<Contact,std::vector<Contact>> expected_provider_list;
+
+  // Mock Setup
+  std::shared_ptr<MockRpcs<transport::TcpTransport>> new_rpcs(
+      new MockRpcs<transport::TcpTransport>(asio_service_, securifier_));
+  new_rpcs->set_node_id(node_id_);
+  SetRpcs<transport::TcpTransport>(new_rpcs);
+  EXPECT_CALL(*new_rpcs, Downlist(testing::_, testing::_, testing::_))
+      .WillRepeatedly(testing::WithArgs<0, 2>(testing::Invoke(
+          std::bind(&MockRpcs<transport::TcpTransport>::SendDownlistMock,
+                    new_rpcs.get(),
+                    arg::_1,
+                    arg::_2,
+                    expected_provider_list))));
+  uint16_t num_providers(maidsafe::RandomUint32() % 5 + node_->k_);
+  uint16_t num_down_contacts(maidsafe::RandomUint32() % 15 + node_->k_);
+  Downlist down_list(std::bind(static_cast<bool(*)(const Contact&,  // NOLINT (Viv)
+                     const Contact&, const NodeId&)>(&CloserToTarget),
+                     arg::_1, arg::_2, node_id_));
+
+  std::set<Contact> down_contacts;
+  while (down_contacts.size() < num_down_contacts)
+    down_contacts.insert(
+      ComposeContact(NodeId(GenerateRandomId(node_id_, 490)), 5600));
+
+  std::set<Contact> providers;
+  while (providers.size() < num_providers)
+    providers.insert(
+      ComposeContact(NodeId(GenerateRandomId(node_id_, 490)), 5600));
+
+  for (auto it(down_contacts.begin()); it != down_contacts.end(); ++it)
+    down_list.insert(std::make_pair(*it, ContactInfo()));
+
+  for (auto itr(down_list.begin()); itr != down_list.end(); ++itr) {
+    uint16_t num_providers_for_contact(
+        maidsafe::RandomUint32() % num_providers + node_->k_);
+    for(size_t i = 0; i < num_providers_for_contact; ++i) {
+      auto provider_itr(providers.begin());
+      std::advance(provider_itr, maidsafe::RandomUint32() % providers.size());
+      (*itr).second.providers.push_back(*provider_itr);
+      auto expected_provider_list_itr(
+          expected_provider_list.find(*provider_itr));
+      if(expected_provider_list_itr != expected_provider_list.end())
+        (*expected_provider_list_itr).second.push_back((*itr).first);
+      else
+        expected_provider_list.insert(
+            std::make_pair(*provider_itr,
+                           std::vector<Contact>(1,(*itr).first)));
+    }
+  }
+  node_->SendDownlist(down_list);*/
 }
 
 }  // namespace test
